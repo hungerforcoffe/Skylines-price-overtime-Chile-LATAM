@@ -1,127 +1,131 @@
-# ✈️ Comparador de Vuelos Chile
+# ✈️ Skylines — Análisis de Precios de Paquetes Turísticos Chile
 
-Scraper + análisis de precios para aerolíneas chilenas (LATAM, SKY y extensible a más).
+Herramienta de scraping y seguimiento histórico de precios de paquetes de viaje en **LATAM Travel Chile (Despegar)**, con base de datos SQLite para detectar cambios de precio a lo largo del tiempo.
 
 ---
 
-## 📁 Archivos del proyecto
+## 📁 Estructura del proyecto
 
-| Archivo | Descripción |
-|---|---|
-| `scraper_vuelos.py` | Scraper principal con Playwright |
-| `inspector_html.py` | Herramienta de diagnóstico para encontrar selectores CSS |
-| `analisis_vuelos.py` | Análisis y ranking de conveniencia |
+```
+Skylines_project_Chile/
+│
+├── scraper_despegar_v2.py      # Scraper principal (guarda JSON y CSV)
+├── analisis_vuelos.py          # Análisis y ranking de conveniencia
+├── inspector_html.py           # Diagnóstico de selectores CSS
+│
+├── paquetes.json               # Último resultado del scraper (JSON)
+├── paquetes.csv                # Último resultado del scraper (CSV)
+│
+└── DB_skyline_latam/
+    ├── scraper_con_bd.py       # Scraper con persistencia histórica en SQLite
+    ├── precios.db              # Base de datos SQLite con historial de precios
+    └── crear_tarea_diaria.bat  # (Opcional) Automatización con Windows Task Scheduler
+```
 
 ---
 
 ## 🚀 Instalación
 
 ```bash
-pip install playwright pandas
+pip install playwright
 playwright install chromium
 ```
 
+> ⚠️ Este proyecto usa **Brave Browser** como motor. Verifica que la ruta en cada script apunte a tu instalación:
+> ```python
+> BRAVE_PATH = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
+> ```
+
 ---
 
-## 🔄 Flujo de trabajo recomendado
+## 🔄 Flujo de trabajo
 
-### Paso 1 — Inspeccionar la página (primera vez)
+### Opción A — Scraping simple (sin historial)
+
+```bash
+# 1. Scrapear y guardar en JSON + CSV
+python scraper_despegar_v2.py
+
+# 2. Ver ranking de conveniencia
+python analisis_vuelos.py
+```
+
+### Opción B — Scraping con historial de precios (recomendado)
+
+```bash
+# Correr una vez al día — guarda snapshot en precios.db
+python DB_skyline_latam/scraper_con_bd.py
+
+# Ver qué precios subieron o bajaron respecto al día anterior
+python DB_skyline_latam/scraper_con_bd.py reporte
+
+# Ver historial completo de un destino específico
+python DB_skyline_latam/scraper_con_bd.py historial "Punta Cana"
+```
+
+---
+
+## 📊 Datos capturados por paquete
+
+| Campo | Descripción |
+|---|---|
+| `nombre_paquete` | Destino del paquete |
+| `precio_clp` | Precio final por persona (CLP) |
+| `precio_original_clp` | Precio antes del descuento (si aplica) |
+| `ahorro_clp` | Monto ahorrado (si aplica) |
+| `descuento_pct` | Porcentaje de descuento (calculado) |
+| `dias_noches` | Duración del paquete (ej: "8 DÍAS / 7 NOCHES") |
+| `rating` | Puntuación del paquete (ej: 7.9) |
+| `estrellas` | Categoría del hotel (1-5) |
+| `hotel_y_vuelo` | 1 si incluye hotel + vuelo, 0 si no |
+| `millas` | Millas LATAM Pass acumulables |
+| `oferta_imbatible` | 1 si tiene etiqueta "Oferta Imbatible" |
+| `fecha_scraping` | Fecha y hora de la captura |
+
+---
+
+## 🗄️ Estructura de la base de datos
+
+```sql
+destinos   →  id, nombre
+snapshots  →  id, fecha, hora, total_paquetes
+precios    →  snapshot_id, destino_id, precio_clp, ahorro_clp, rating ...
+```
+
+Cada vez que corres `scraper_con_bd.py` se crea un nuevo **snapshot** con todos los precios del día, permitiendo comparar la evolución en el tiempo.
+
+---
+
+## 🛠️ Diagnóstico
+
+Si el scraper no captura datos, usa el inspector para identificar los selectores CSS actuales de la página:
+
 ```bash
 python inspector_html.py
 ```
-Esto guarda `inspeccion.html` y `screenshot.png`.  
-Abre `inspeccion.html` en tu navegador y usa **DevTools (F12)** para identificar
-los selectores CSS exactos de precios, horarios y escalas.
 
-### Paso 2 — Ajustar selectores en `scraper_vuelos.py`
-En las clases `ScraperLATAM` y `ScraperSKY`, modifica las líneas con
-`query_selector(...)` usando los selectores que encontraste.
-
-Ejemplo:
-```python
-# Antes (genérico)
-precio_el = await tarjeta.query_selector("[class*='price']")
-
-# Después (exacto, tras inspección)
-precio_el = await tarjeta.query_selector(".sc-bdXxxt.precio-total span")
-```
-
-### Paso 3 — Ejecutar el scraper
-```bash
-python scraper_vuelos.py
-```
-Genera: `vuelos.json` y `vuelos.csv`
-
-### Paso 4 — Analizar resultados
-```bash
-python analisis_vuelos.py
-```
-Genera: `reporte_comparativo.csv` con ranking de conveniencia.
+Genera `inspeccion.html` y `screenshot.png` para inspección manual con DevTools.
 
 ---
 
-## ⚙️ Configuración del scraper
+## ⚙️ Automatización diaria (opcional)
 
-En `scraper_vuelos.py`, edita estas variables en `main()`:
-
-```python
-ORIGEN   = "SCL"         # Código IATA origen
-DESTINO  = "PMC"         # Código IATA destino
-FECHA    = "2025-08-15"  # Formato YYYY-MM-DD
-HEADLESS = True          # False para ver el navegador
-```
-
-### Códigos IATA chilenos comunes
-
-| Ciudad | Código |
-|---|---|
-| Santiago | SCL |
-| Puerto Montt | PMC |
-| Punta Arenas | PUQ |
-| Calama | CJC |
-| Antofagasta | ANF |
-| Concepción | CCP |
-| Arica | ARI |
-| Iquique | IQQ |
+Para correr el scraper automáticamente todos los días a las 9 AM, ejecuta `crear_tarea_diaria.bat` como **Administrador**. Edita las rutas dentro del archivo antes de ejecutarlo.
 
 ---
 
-## 📊 Cálculo de Score de Conveniencia (0-100)
+## ⚠️ Consideraciones
 
-| Factor | Puntos |
-|---|---|
-| Base | +100 |
-| Por cada escala | -15 |
-| Equipaje bodega incluido | +10 |
-| Equipaje cabina incluido | +5 |
-| Permite cambios | +8 |
-| Permite reembolso | +7 |
-| Penalización precio relativo | -0 a -20 |
+- Los sitios de viajes usan JavaScript dinámico — el scraper requiere `HEADLESS = False` para evitar detección de bots.
+- No ejecutar más de una vez cada 10 minutos para no sobrecargar los servidores.
+- Verifica los términos de uso del sitio antes de un uso intensivo.
 
 ---
 
-## ⚠️ Consideraciones legales y técnicas
+## 📈 Roadmap
 
-- **Términos de servicio**: Verifica siempre los T&C de cada sitio antes de scrapear.
-- **Rate limiting**: El script incluye pausas entre requests (`asyncio.sleep`). No las elimines.
-- **Sitios dinámicos**: LATAM y SKY usan React/Angular. Si los selectores fallan, usa el `inspector_html.py` para actualizarlos.
-- **CAPTCHAs**: Si el sitio bloquea el scraper, considera usar proxies rotativos o servicios como ScrapingBee.
-- **Frecuencia**: No ejecutes el scraper más de 1 vez cada 10 minutos por aerolínea.
-
----
-
-## 🔧 Extender a más aerolíneas
-
-Para agregar JetSmart u otras, crea una clase nueva siguiendo el mismo patrón:
-
-```python
-class ScraperJetSmart:
-    def __init__(self, page: Page):
-        self.page = page
-
-    async def buscar(self, origen, destino, fecha) -> list[Vuelo]:
-        # ... mismo patrón que ScraperLATAM
-        pass
-```
-
+- [ ] Visualización de evolución de precios con gráficos
+- [ ] Scraping de sub-paquetes al hacer clic en cada destino
+- [ ] Alertas por email cuando un precio baje X%
+- [ ] Comparación entre múltiples agencias (Sky, Cocha, Viajes Falabella)
 Luego agrégala en `OrquestadorVuelos.ejecutar_busqueda()`.
