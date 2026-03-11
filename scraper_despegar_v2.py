@@ -197,12 +197,12 @@ async def parsear(page: Page) -> list[Paquete]:
                 pkg.hotel_y_vuelo = 1 if ("hotel" in desc_texto and "vuelo" in desc_texto) else 0
 
             # ── Millas ────────────────────────────────────────
-            millas_els = await t.query_selector_all(".-eva-3-bold")
-            for mel in millas_els:
-                texto_m = await mel.inner_text()
+            # Por esto:
+            millas_el = await t.query_selector(".capitalized-message .-eva-3-bold")
+            if millas_el:
+                texto_m = await millas_el.inner_text()
                 if "milla" in texto_m.lower():
-                    pkg.millas = limpiar_precio(texto_m)
-                    break
+                    pkg["millas"] = limpiar_precio(texto_m)
 
             # ── Oferta Imbatible ──────────────────────────────
             texto_tarjeta = (await t.inner_text()).lower()
