@@ -265,11 +265,37 @@ async def scrape() -> list[dict]:
             await browser.close()
             return []
 
+        # Scroll para activar lazy-load de secciones
         for i in range(SCROLL_VECES):
             await page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
             await asyncio.sleep(1.5)
+            print(f"   scroll {i+1}/{SCROLL_VECES}")
 
         await asyncio.sleep(2)
+
+        # Clic en todas las flechas de carrusel hasta agotarlas
+        print("🔄 Expandiendo carruseles...")
+        clics_totales = 0
+        while True:
+            flechas = await page.query_selector_all(".eva-3-nav-slider.-right")
+            if not flechas:
+                break
+            hubo_clic = False
+            for flecha in flechas:
+                try:
+                    visible = await flecha.is_visible()
+                    enabled = await flecha.is_enabled()
+                    if visible and enabled:
+                        await flecha.click()
+                        await asyncio.sleep(0.8)
+                        clics_totales += 1
+                        hubo_clic = True
+                except Exception:
+                    continue
+            if not hubo_clic:
+                break
+
+        print(f"   {clics_totales} clics en flechas realizados.")
 
         tarjetas = await page.query_selector_all(".offer-card-wrapper")
         print(f"🃏 {len(tarjetas)} tarjetas encontradas.")
