@@ -293,6 +293,32 @@ async def main():
             await asyncio.sleep(1.5)
         await asyncio.sleep(2)
 
+        # Clic en flechas de carrusel para expandir todos los paquetes
+        print("   Expandiendo carruseles...")
+        clics_totales = 0
+        sin_cambio = 0
+        while sin_cambio < 3:
+            flechas = await page.query_selector_all(".eva-3-nav-slider.-right")
+            hubo_clic = False
+            for flecha in flechas:
+                try:
+                    visible = await flecha.is_visible()
+                    enabled = await flecha.is_enabled()
+                    if visible and enabled:
+                        await flecha.click()
+                        await asyncio.sleep(0.8)
+                        clics_totales += 1
+                        hubo_clic = True
+                except Exception:
+                    continue
+            if not hubo_clic:
+                sin_cambio += 1
+            else:
+                sin_cambio = 0
+        print(f"   {clics_totales} clics en flechas realizados.")
+
+        # ── Capturar links únicos ─────────────────────────────
+
         # ── Capturar links únicos ─────────────────────────────
         tarjetas = await page.query_selector_all(".offer-card-wrapper")
         links = []
