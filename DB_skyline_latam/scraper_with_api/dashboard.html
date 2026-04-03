@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skylines — Dashboard de Precios</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0a0f;
+    --surface:   #12121a;
+    --surface2:  #1a1a26;
+    --border:    #2a2a3a;
+    --accent:    #e8ff47;
+    --accent2:   #47c8ff;
+    --accent3:   #ff6b47;
+    --text:      #e8e8f0;
+    --muted:     #6b6b8a;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRAIN OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 2.5rem 3rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .header-left h1 {
+    font-family: var(--font-head);
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .header-left h1 span {
+    color: var(--accent);
+  }
+
+  .header-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .header-stats {
+    display: flex;
+    gap: 2rem;
+    flex-shrink: 0;
+  }
+
+  .stat-pill {
+    text-align: right;
+  }
+
+  .stat-pill .val {
+    font-family: var(--font-head);
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .stat-pill .lbl {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 0.2rem;
+  }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 3rem;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .tab {
+    padding: 1rem 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── PANELS ── */
+  .panel { display: none; padding: 2.5rem 3rem; }
+  .panel.active { display: block; }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    font-family: var(--font-head);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+  }
+
+  /* ── CONTROLS ── */
+  .controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .controls label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-right: 0.3rem;
+  }
+
+  select, input[type="text"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  select:hover, input:hover { border-color: var(--accent); }
+  select:focus, input:focus { border-color: var(--accent); }
+
+  /* ── CHART CONTAINER ── */
+  .chart-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .chart-wrap canvas { max-height: 400px; }
+
+  /* ── GRID CARDS ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: default;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .card-hotel {
+    font-family: var(--font-head);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.3rem;
+    line-height: 1.3;
+  }
+
+  .card-destino {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.8rem;
+  }
+
+  .card-prices {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .price-item { flex: 1; }
+
+  .price-val {
+    font-family: var(--font-head);
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  .price-val.green { color: var(--accent); }
+  .price-val.red   { color: var(--accent3); }
+  .price-val.blue  { color: var(--accent2); }
+
+  .price-lbl {
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .badge-drop  { background: rgba(232,255,71,0.1);  color: var(--accent); }
+  .badge-stars { background: rgba(71,200,255,0.1); color: var(--accent2); }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+
+  th {
+    padding: 0.8rem 1rem;
+    text-align: left;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(42,42,58,0.5);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+
+  .num { font-family: var(--font-mono); text-align: right; }
+  .tag-drop { color: var(--accent); font-weight: 500; }
+  .tag-rise { color: var(--accent3); }
+
+  /* ── SPARKLINE ── */
+  .spark { width: 80px; height: 30px; }
+
+  /* ── LOADING ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    gap: 1rem;
+  }
+
+  #loading h2 {
+    font-family: var(--font-head);
+    font-size: 1.5rem;
+    color: var(--accent);
+  }
+
+  #loading p {
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  .loader {
+    width: 40px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .loader::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: 40%;
+    background: var(--accent);
+    animation: load 1s ease-in-out infinite alternate;
+    border-radius: 2px;
+  }
+
+  @keyframes load {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(350%); }
+  }
+
+  /* ── ERROR ── */
+  #error-msg {
+    display: none;
+    background: rgba(255,107,71,0.1);
+    border: 1px solid var(--accent3);
+    border-radius: 8px;
+    padding: 2rem;
+    margin: 2rem 3rem;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+
+  #error-msg code {
+    display: block;
+    margin-top: 1rem;
+    padding: 0.8rem;
+    background: var(--surface2);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--accent2);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    header { padding: 1.5rem; flex-direction: column; align-items: flex-start; }
+    .tabs  { padding: 0 1.5rem; }
+    .panel { padding: 1.5rem; }
+    .header-stats { gap: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h2>SKYLINES</h2>
+  <div class="loader"></div>
+  <p>Cargando dashboard_data.json...</p>
+</div>
+
+<div id="error-msg">
+  <strong>No se pudo cargar dashboard_data.json</strong><br>
+  Primero ejecuta el script de exportación:
+  <code>python exportar_data.py</code>
+  Luego abre este archivo desde la misma carpeta donde está <code>dashboard_data.json</code>.
+</div>
+
+<header style="display:none" id="main-header">
+  <div class="header-left">
+    <h1>SKY<span>LINES</span></h1>
+    <div class="header-meta">Análisis de precios · LATAM Travel Chile · <span id="fecha-gen"></span></div>
+  </div>
+  <div class="header-stats">
+    <div class="stat-pill">
+      <div class="val" id="stat-snapshots">—</div>
+      <div class="lbl">Días registrados</div>
+    </div>
+    <div class="stat-pill">
+      <div class="val" id="stat-destinos">—</div>
+      <div class="lbl">Destinos</div>
+    </div>
+    <div class="stat-pill">
+      <div class="val" id="stat-hoteles">—</div>
+      <div class="lbl">Total hoteles</div>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" style="display:none" id="main-tabs">
+  <button class="tab active" onclick="showTab('evolucion', this)">Evolución por destino</button>
+  <button class="tab" onclick="showTab('hotel', this)">Evolución por hotel</button>
+  <button class="tab" onclick="showTab('bajas', this)">Mayores bajas</button>
+  <button class="tab" onclick="showTab('resumen', this)">Resumen destinos</button>
+</nav>
+
+<!-- PANEL 1: Evolución por destino -->
+<div class="panel active" id="panel-evolucion">
+  <div class="section-title">Precio promedio diario por destino</div>
+  <div class="controls">
+    <label>Destinos</label>
+    <select id="sel-destinos" multiple size="5" style="min-width:200px"></select>
+    <div style="display:flex;flex-direction:column;gap:0.5rem">
+      <label>Métrica</label>
+      <select id="sel-metrica">
+        <option value="precio_promedio">Precio promedio</option>
+        <option value="precio_minimo">Precio mínimo</option>
+        <option value="precio_maximo">Precio máximo</option>
+      </select>
+    </div>
+    <button onclick="renderEvolucion()" style="
+      background:var(--accent);color:var(--bg);border:none;
+      padding:0.5rem 1.2rem;border-radius:4px;font-family:var(--font-mono);
+      font-size:0.75rem;letter-spacing:0.08em;cursor:pointer;font-weight:500;
+      text-transform:uppercase;align-self:flex-end
+    ">Actualizar</button>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="chart-evolucion"></canvas>
+  </div>
+</div>
+
+<!-- PANEL 2: Evolución por hotel -->
+<div class="panel" id="panel-hotel">
+  <div class="section-title">Seguimiento de precio por hotel específico</div>
+  <div class="controls">
+    <label>Hotel</label>
+    <select id="sel-hotel" style="min-width:350px;max-width:100%"></select>
+    <button onclick="renderHotel()" style="
+      background:var(--accent);color:var(--bg);border:none;
+      padding:0.5rem 1.2rem;border-radius:4px;font-family:var(--font-mono);
+      font-size:0.75rem;letter-spacing:0.08em;cursor:pointer;font-weight:500;
+      text-transform:uppercase
+    ">Ver</button>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="chart-hotel"></canvas>
+  </div>
+  <div id="hotel-info" style="margin-top:1rem;font-size:0.8rem;color:var(--muted);line-height:1.8"></div>
+</div>
+
+<!-- PANEL 3: Mayores bajas -->
+<div class="panel" id="panel-bajas">
+  <div class="section-title">Hoteles con mayor variación de precio en el período</div>
+  <div class="cards-grid" id="cards-bajas"></div>
+</div>
+
+<!-- PANEL 4: Resumen destinos -->
+<div class="panel" id="panel-resumen">
+  <div class="section-title">Precio promedio por destino — período completo</div>
+  <div class="chart-wrap" style="margin-bottom:2rem">
+    <canvas id="chart-resumen"></canvas>
+  </div>
+  <div class="table-wrap">
+    <table id="tabla-resumen">
+      <thead>
+        <tr>
+          <th>Destino</th>
+          <th class="num">Precio mín</th>
+          <th class="num">Precio prom</th>
+          <th class="num">Precio máx</th>
+          <th class="num">Desc. prom</th>
+          <th class="num">Hoteles</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-resumen"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ── PALETA DE COLORES PARA LÍNEAS ──────────────────────────
+const COLORS = [
+  '#e8ff47','#47c8ff','#ff6b47','#c847ff',
+  '#47ffc8','#ff47b8','#ffc847','#8847ff',
+  '#47ff8a','#ff8a47','#47b8ff','#ff4747',
+];
+
+let DATA = null;
+let chartEvolucion = null;
+let chartHotel     = null;
+let chartResumen   = null;
+
+// ── UTILIDADES ─────────────────────────────────────────────
+function fmt(n) {
+  if (!n) return '—';
+  return '$' + Math.round(n).toLocaleString('es-CL');
+}
+
+function showTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── CARGAR DATA ────────────────────────────────────────────
+async function cargarData() {
+  try {
+    const resp = await fetch('dashboard_data.json');
+    if (!resp.ok) throw new Error('No se encontró dashboard_data.json');
+    DATA = await resp.json();
+    inicializar();
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'block';
+  }
+}
+
+function inicializar() {
+  document.getElementById('loading').style.display    = 'none';
+  document.getElementById('main-header').style.display = '';
+  document.getElementById('main-tabs').style.display   = '';
+  document.querySelectorAll('.panel').forEach(p => {
+    if (p.id === 'panel-evolucion') p.style.display = '';
+  });
+
+  // Stats header
+  document.getElementById('stat-snapshots').textContent = DATA.snapshots.length;
+  document.getElementById('stat-destinos').textContent  = DATA.destinos.length;
+  const totalHoteles = DATA.snapshots.reduce((s,x) => s + (x.total_hoteles||0), 0);
+  document.getElementById('stat-hoteles').textContent   =
+    (totalHoteles/1000).toFixed(1) + 'k';
+  document.getElementById('fecha-gen').textContent = DATA.generado_en;
+
+  // Selector destinos (múltiple)
+  const selDest = document.getElementById('sel-destinos');
+  DATA.destinos.forEach((d, i) => {
+    const opt = new Option(d, d, i < 5, i < 5);
+    selDest.add(opt);
+  });
+
+  // Selector hoteles
+  const selHotel = document.getElementById('sel-hotel');
+  Object.entries(DATA.hoteles_top).forEach(([id, h]) => {
+    selHotel.add(new Option(`${h.nombre} (${h.destino})`, id));
+  });
+
+  renderEvolucion();
+  renderBajas();
+  renderResumen();
+}
+
+// ── PANEL 1: EVOLUCIÓN POR DESTINO ────────────────────────
+function renderEvolucion() {
+  const sel      = document.getElementById('sel-destinos');
+  const metrica  = document.getElementById('sel-metrica').value;
+  const elegidos = Array.from(sel.selectedOptions).map(o => o.value);
+
+  // Agrupar data por destino
+  const porDestino = {};
+  DATA.evolucion.forEach(row => {
+    if (!elegidos.includes(row.destino)) return;
+    if (!porDestino[row.destino]) porDestino[row.destino] = [];
+    porDestino[row.destino].push({ x: row.fecha, y: row[metrica] });
+  });
+
+  const datasets = Object.entries(porDestino).map(([dest, puntos], i) => ({
+    label: dest,
+    data:  puntos,
+    borderColor:     COLORS[i % COLORS.length],
+    backgroundColor: COLORS[i % COLORS.length] + '18',
+    borderWidth: 2,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    fill: false,
+  }));
+
+  if (chartEvolucion) chartEvolucion.destroy();
+  chartEvolucion = new Chart(
+    document.getElementById('chart-evolucion'),
+    {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            labels: { color: '#e8e8f0', font: { family: 'DM Mono', size: 11 } }
+          },
+          tooltip: {
+            backgroundColor: '#1a1a26',
+            borderColor: '#2a2a3a',
+            borderWidth: 1,
+            titleColor: '#e8e8f0',
+            bodyColor: '#6b6b8a',
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'category',
+            ticks: { color: '#6b6b8a', font: { family: 'DM Mono', size: 10 } },
+            grid:  { color: '#1a1a26' }
+          },
+          y: {
+            ticks: {
+              color: '#6b6b8a',
+              font: { family: 'DM Mono', size: 10 },
+              callback: v => '$' + (v/1000).toFixed(0) + 'k'
+            },
+            grid: { color: '#1a1a26' }
+          }
+        }
+      }
+    }
+  );
+}
+
+// ── PANEL 2: EVOLUCIÓN POR HOTEL ──────────────────────────
+function renderHotel() {
+  const id    = document.getElementById('sel-hotel').value;
+  const hotel = DATA.hoteles_top[id];
+  if (!hotel) return;
+
+  const labels = hotel.precios.map(p => p.fecha);
+  const vals   = hotel.precios.map(p => p.precio_persona_clp);
+  const orig   = hotel.precios.map(p => p.precio_original_clp);
+
+  if (chartHotel) chartHotel.destroy();
+  chartHotel = new Chart(
+    document.getElementById('chart-hotel'),
+    {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Precio final',
+            data: vals,
+            borderColor: '#e8ff47',
+            backgroundColor: 'rgba(232,255,71,0.08)',
+            borderWidth: 2.5,
+            pointRadius: 5,
+            fill: true,
+            tension: 0.3,
+          },
+          {
+            label: 'Precio original',
+            data: orig,
+            borderColor: '#6b6b8a',
+            borderDash: [5,5],
+            borderWidth: 1.5,
+            pointRadius: 3,
+            fill: false,
+            tension: 0.3,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            labels: { color: '#e8e8f0', font: { family: 'DM Mono', size: 11 } }
+          },
+          tooltip: {
+            backgroundColor: '#1a1a26',
+            borderColor: '#2a2a3a',
+            borderWidth: 1,
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#6b6b8a', font: { family: 'DM Mono', size: 10 } },
+            grid:  { color: '#1a1a26' }
+          },
+          y: {
+            ticks: {
+              color: '#6b6b8a',
+              font: { family: 'DM Mono', size: 10 },
+              callback: v => '$' + (v/1000000).toFixed(1) + 'M'
+            },
+            grid: { color: '#1a1a26' }
+          }
+        }
+      }
+    }
+  );
+
+  // Info del hotel
+  const minP = Math.min(...vals.filter(Boolean));
+  const maxP = Math.max(...vals.filter(Boolean));
+  const variPct = ((maxP - minP) / maxP * 100).toFixed(1);
+  document.getElementById('hotel-info').innerHTML = `
+    <span style="color:var(--text)">${hotel.nombre}</span> &nbsp;·&nbsp;
+    ${hotel.destino} &nbsp;·&nbsp;
+    ${'★'.repeat(hotel.estrellas || 0)} &nbsp;·&nbsp;
+    Rating ${hotel.rating || '—'} &nbsp;·&nbsp;
+    Mín: <span style="color:var(--accent)">${fmt(minP)}</span> &nbsp;·&nbsp;
+    Máx: <span style="color:var(--accent3)">${fmt(maxP)}</span> &nbsp;·&nbsp;
+    Variación: <span style="color:var(--accent2)">${variPct}%</span>
+  `;
+}
+
+// ── PANEL 3: MEJORES BAJAS ────────────────────────────────
+function renderBajas() {
+  const container = document.getElementById('cards-bajas');
+  container.innerHTML = '';
+
+  DATA.mejores_bajas.forEach(h => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-hotel">${h.nombre}</div>
+      <div class="card-destino">${h.destino}</div>
+      <div class="card-prices">
+        <div class="price-item">
+          <div class="price-val green">${fmt(h.precio_min)}</div>
+          <div class="price-lbl">Mínimo</div>
+        </div>
+        <div class="price-item">
+          <div class="price-val red">${fmt(h.precio_max)}</div>
+          <div class="price-lbl">Máximo</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <span class="badge badge-drop">▼ ${h.variacion_pct}% variación</span>
+        ${h.estrellas ? `<span class="badge badge-stars">${'★'.repeat(h.estrellas)}</span>` : ''}
+        ${h.rating ? `<span class="badge badge-stars">Rating ${h.rating}</span>` : ''}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// ── PANEL 4: RESUMEN DESTINOS ─────────────────────────────
+function renderResumen() {
+  const data   = DATA.resumen_destinos;
+  const labels = data.map(d => d.destino);
+  const proms  = data.map(d => d.precio_promedio);
+  const mins   = data.map(d => d.precio_minimo);
+
+  if (chartResumen) chartResumen.destroy();
+  chartResumen = new Chart(
+    document.getElementById('chart-resumen'),
+    {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Precio promedio',
+            data: proms,
+            backgroundColor: 'rgba(232,255,71,0.7)',
+            borderColor: '#e8ff47',
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+          {
+            label: 'Precio mínimo',
+            data: mins,
+            backgroundColor: 'rgba(71,200,255,0.4)',
+            borderColor: '#47c8ff',
+            borderWidth: 1,
+            borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            labels: { color: '#e8e8f0', font: { family: 'DM Mono', size: 11 } }
+          },
+          tooltip: {
+            backgroundColor: '#1a1a26',
+            borderColor: '#2a2a3a',
+            borderWidth: 1,
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#6b6b8a',
+              font: { family: 'DM Mono', size: 9 },
+              maxRotation: 45,
+            },
+            grid: { color: '#1a1a26' }
+          },
+          y: {
+            ticks: {
+              color: '#6b6b8a',
+              font: { family: 'DM Mono', size: 10 },
+              callback: v => '$' + (v/1000000).toFixed(1) + 'M'
+            },
+            grid: { color: '#1a1a26' }
+          }
+        }
+      }
+    }
+  );
+
+  // Tabla
+  const tbody = document.getElementById('tbody-resumen');
+  tbody.innerHTML = '';
+  data.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${d.destino}</td>
+      <td class="num" style="color:var(--accent)">${fmt(d.precio_minimo)}</td>
+      <td class="num">${fmt(d.precio_promedio)}</td>
+      <td class="num" style="color:var(--accent3)">${fmt(d.precio_maximo)}</td>
+      <td class="num">${d.descuento_promedio ? d.descuento_promedio + '%' : '—'}</td>
+      <td class="num">${d.total_hoteles}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── INIT ───────────────────────────────────────────────────
+cargarData();
+</script>
+</body>
+</html>
